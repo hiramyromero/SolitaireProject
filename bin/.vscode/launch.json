@@ -1,0 +1,12 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "java",
+      "name": "Run SolitaireGUI (JavaFX)",
+      "request": "launch",
+      "mainClass": "SolitaireGUI",
+      "vmArgs": "--module-path /Users/hiramromero/Downloads/javafx-sdk-25.0.2/lib --add-modules javafx.controls"
+    }
+  ]
+}
