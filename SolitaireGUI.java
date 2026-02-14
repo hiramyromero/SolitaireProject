@@ -1,63 +1,101 @@
 import javafx.application.Application;
+import javafx.geometry.Insets;
+import javafx.geometry.Pos;
 import javafx.scene.Scene;
-import javafx.scene.control.*;
+import javafx.scene.control.Button;
+import javafx.scene.control.CheckBox;
+import javafx.scene.control.Label;
+import javafx.scene.control.RadioButton;
+import javafx.scene.control.ToggleGroup;
+import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.GridPane;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.scene.shape.Line;
+import javafx.scene.text.Font;
 import javafx.stage.Stage;
 
 public class SolitaireGUI extends Application {
 
-    private SolitaireGame game = new SolitaireGame();
-    private Label status = new Label("Status: Ready");
+    private static final int SIZE = 7;
 
     @Override
     public void start(Stage stage) {
 
-        Label title = new Label("Peg Solitaire GUI");
+        // this is just the title at the top
+        Label title = new Label("Solitaire GUI");
+        title.setFont(Font.font(18));
 
-        // Required: Line
-        Line divider = new Line(0, 0, 300, 0);
+        // simple line under the title
+        Line divider = new Line(0, 0, 280, 0);
 
-        // Required: CheckBox
-        CheckBox diagonalCheck = new CheckBox("Enable Diagonal Moves");
-        diagonalCheck.setOnAction(e -> {
-            game.setDiagonalEnabled(diagonalCheck.isSelected());
-            status.setText("Diagonal Enabled: " + game.isDiagonalEnabled());
-        });
+        // checkbox (does nothing yet)
+        CheckBox diagonalCheck = new CheckBox("Allow diagonal moves");
 
-        // Required: RadioButtons
-        ToggleGroup difficultyGroup = new ToggleGroup();
+        // radio button (just one option for now)
+        ToggleGroup group = new ToggleGroup();
+        RadioButton englishBoard = new RadioButton("English Board");
+        englishBoard.setToggleGroup(group);
+        englishBoard.setSelected(true);
 
-        RadioButton easy = new RadioButton("Easy");
-        RadioButton medium = new RadioButton("Medium");
-        RadioButton hard = new RadioButton("Hard");
+        // basic buttons
+        Button newGame = new Button("New Game");
+        Button restart = new Button("Restart");
 
-        easy.setToggleGroup(difficultyGroup);
-        medium.setToggleGroup(difficultyGroup);
-        hard.setToggleGroup(difficultyGroup);
+        // where these buttons sit
+        HBox buttonRow = new HBox(10, newGame, restart);
+        buttonRow.setAlignment(Pos.CENTER_LEFT);
 
-        medium.setSelected(true);
-
-        Button addButton = new Button("Add Point");
-        addButton.setOnAction(e -> {
-            game.addPoint();
-            status.setText("Score: " + game.getScore());
-        });
-
-        VBox root = new VBox(10,
+        // left side layout
+        VBox leftPanel = new VBox(12,
                 title,
                 divider,
                 diagonalCheck,
-                easy,
-                medium,
-                hard,
-                addButton,
-                status
+                englishBoard,
+                buttonRow
         );
+        leftPanel.setPadding(new Insets(12));
+        leftPanel.setPrefWidth(220);
 
-        Scene scene = new Scene(root, 400, 300);
+        // this part draws the board
+        GridPane boardGrid = new GridPane();
+        boardGrid.setHgap(6);
+        boardGrid.setVgap(6);
+        boardGrid.setPadding(new Insets(12));
+        boardGrid.setAlignment(Pos.CENTER);
 
-        stage.setTitle("Solitaire Starter");
+        // build the English board shape (not full square)
+        for (int r = 0; r < SIZE; r++) {
+            for (int c = 0; c < SIZE; c++) {
+
+                // corners of English board don't exist
+                if ((r < 2 || r > 4) && (c < 2 || c > 4)) {
+                    continue;
+                }
+
+                Button cell;
+
+                // center hole looks empty
+                if (r == 3 && c == 3) {
+                    cell = new Button("○");
+                } else {
+                    cell = new Button("●");
+                }
+
+                cell.setPrefSize(45, 45);
+                cell.setDisable(true); // just display
+
+                boardGrid.add(cell, c, r);
+            }
+        }
+
+        // main layout structure
+        BorderPane root = new BorderPane();
+        root.setLeft(leftPanel);
+        root.setCenter(boardGrid);
+
+        Scene scene = new Scene(root, 700, 420);
+        stage.setTitle("Solitaire GUI");
         stage.setScene(scene);
         stage.show();
     }
@@ -66,4 +104,3 @@ public class SolitaireGUI extends Application {
         launch();
     }
 }
-
