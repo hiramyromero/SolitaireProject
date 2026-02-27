@@ -491,7 +491,7 @@ public class SolitaireGUI extends Application {
         }
     }
 
-    // Set selection then refresh UI
+    // Set selection then refresh UI to show the highlight on the selected peg.
     private void setSelection(int r, int c) {
         selR = r;
         selC = c;
