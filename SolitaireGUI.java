@@ -24,7 +24,6 @@ public class SolitaireGUI extends Application {
     // Each type generates a different board shape
     private enum BoardType {
         ENGLISH,   // 7x7 cross
-        HEXAGON,   // hexagon-shaped board (uses a 9x9 grid space)
         DIAMOND    // diamond-shaped board (uses a 9x9 grid space)
     }
 
@@ -37,7 +36,6 @@ public class SolitaireGUI extends Application {
 
     private ToggleGroup boardTypeGroup;
     private RadioButton englishBoard;
-    private RadioButton hexagonBoard;
     private RadioButton diamondBoard;
 
     private Button newGameBtn;
@@ -83,10 +81,6 @@ public class SolitaireGUI extends Application {
         englishBoard = new RadioButton("English");
         englishBoard.setToggleGroup(boardTypeGroup);
         englishBoard.setSelected(true);
-
-        hexagonBoard = new RadioButton("Hexagon");
-        hexagonBoard.setToggleGroup(boardTypeGroup);
-
         diamondBoard = new RadioButton("Diamond");
         diamondBoard.setToggleGroup(boardTypeGroup);
 
@@ -108,20 +102,19 @@ public class SolitaireGUI extends Application {
 
         // Full left panel layout
         VBox leftPanel = new VBox(12,
-                title,
-                divider,
-                new Label("Board Type:"),
-                englishBoard,
-                hexagonBoard,
-                diamondBoard,
-                diagonalCheck,
-                buttonRow,
-                new Separator(),
-                new Label("Status:"),
-                statusLabel,
-                new Separator(),
-                new Label("Stats:"),
-                statsLabel
+            title,
+            divider,
+            new Label("Board Type:"),
+            englishBoard,
+            diamondBoard,
+            diagonalCheck,
+            buttonRow,
+            new Separator(),
+            new Label("Status:"),
+            statusLabel,
+            new Separator(),
+            new Label("Stats:"),
+            statsLabel
         );
         leftPanel.setPadding(new Insets(12));
         leftPanel.setPrefWidth(240);
@@ -151,7 +144,6 @@ public class SolitaireGUI extends Application {
             if (newT == null) return;
 
             if (newT == englishBoard) currentType = BoardType.ENGLISH;
-            else if (newT == hexagonBoard) currentType = BoardType.HEXAGON;
             else currentType = BoardType.DIAMOND;
 
             startNewGame();
@@ -218,7 +210,6 @@ public class SolitaireGUI extends Application {
     // -------------------------------
     // Board size depends on board type:
     // English = 7x7
-    // Hexagon = 9x9 (grid space, but masked into hex)
     // Diamond = 9x9 (grid space, but masked into diamond)
     // -------------------------------
     private int sizeFor(BoardType type) {
@@ -256,35 +247,13 @@ public class SolitaireGUI extends Application {
                 }
             }
 
-        } else if (type == BoardType.DIAMOND) {
+        } else {
 
             // Diamond shape (Manhattan distance from center)
             int mid = size / 2;
             for (int r = 0; r < size; r++) {
                 for (int c = 0; c < size; c++) {
                     validHole[r][c] = Math.abs(r - mid) + Math.abs(c - mid) <= mid;
-                }
-            }
-
-        } else {
-
-            // Hexagon board (true hex shape using cube distance)
-            // This creates a regular hex with "radius" = mid inside a (2*mid+1) x (2*mid+1) grid.
-            // For size=9 -> mid=4 -> radius=4.
-            int mid = size / 2;
-            int radius = mid;
-
-            for (int row = 0; row < size; row++) {
-                for (int col = 0; col < size; col++) {
-
-                    // Treat (col,row) as axial coords centered at (mid,mid)
-                    int q = col - mid;
-                    int rAx = row - mid;
-                    int s = -q - rAx;
-
-                    // Inside hex if cube distance <= radius
-                    int dist = Math.max(Math.abs(q), Math.max(Math.abs(rAx), Math.abs(s)));
-                    validHole[row][col] = dist <= radius;
                 }
             }
         }
