@@ -1,12 +1,12 @@
 // SolitaireGUI.java
 // This file holds my JavaFX GUI + the basic game logic needed for Peg Solitaire.
-// Goal of this version:
-// - Let user choose board type/size (English 7x7 / European 9x9)
+// Minimum features covered in this version:
+// - Choose the board type (English / Hexagon / Diamond) -> board type decides size + shape
 // - Start a new game + restart current game
 // - Make a move by clicking a peg then clicking an empty hole
-// - Detect if the game is over (no valid moves left)
-// - Optional: allow diagonal moves (checkbox)
-// TEST COMMIT
+// - Determine if a game is over (no valid moves left)
+// Still includes UI elements I already used:
+// - Text (labels), a line divider, a checkbox, and radio buttons
 
 import javafx.application.Application;
 import javafx.geometry.Insets;
@@ -20,10 +20,12 @@ import javafx.stage.Stage;
 
 public class SolitaireGUI extends Application {
 
-    // Board types we support (board type decides the board size + shape)
+    // Board types the user can choose
+    // Each type generates a different board shape
     private enum BoardType {
-        ENGLISH,   // 7x7 cross board
-        EUROPEAN   // 9x9 cross board
+        ENGLISH,   // 7x7 cross
+        HEXAGON,   // hexagon-shaped board (uses a 9x9 grid space)
+        DIAMOND    // diamond-shaped board (uses a 9x9 grid space)
     }
 
     // --- GUI pieces I need to access later (so I store them as fields) ---
@@ -32,9 +34,11 @@ public class SolitaireGUI extends Application {
     private Label statsLabel;
 
     private CheckBox diagonalCheck;
+
     private ToggleGroup boardTypeGroup;
     private RadioButton englishBoard;
-    private RadioButton europeanBoard;
+    private RadioButton hexagonBoard;
+    private RadioButton diamondBoard;
 
     private Button newGameBtn;
     private Button restartBtn;
@@ -64,7 +68,7 @@ public class SolitaireGUI extends Application {
         // -------------------------------
 
         // Title section
-        Label title = new Label("Solitaire");
+        Label title = new Label("Solitaire GUI");
         title.setFont(Font.font(18));
 
         // Simple divider under the title (just to make it look nicer)
@@ -73,15 +77,18 @@ public class SolitaireGUI extends Application {
         // Checkbox to allow diagonal moves (this changes move rules)
         diagonalCheck = new CheckBox("Allow diagonal moves");
 
-        // Radio buttons for board type choice
+        // Radio buttons for board selection (English / Hexagon / Diamond)
         boardTypeGroup = new ToggleGroup();
 
-        englishBoard = new RadioButton("English Board (7x7)");
+        englishBoard = new RadioButton("English");
         englishBoard.setToggleGroup(boardTypeGroup);
         englishBoard.setSelected(true);
 
-        europeanBoard = new RadioButton("European Board (9x9)");
-        europeanBoard.setToggleGroup(boardTypeGroup);
+        hexagonBoard = new RadioButton("Hexagon");
+        hexagonBoard.setToggleGroup(boardTypeGroup);
+
+        diamondBoard = new RadioButton("Diamond");
+        diamondBoard.setToggleGroup(boardTypeGroup);
 
         // Main buttons
         newGameBtn = new Button("New Game");
@@ -103,10 +110,11 @@ public class SolitaireGUI extends Application {
         VBox leftPanel = new VBox(12,
                 title,
                 divider,
-                new Label("Options:"),
-                diagonalCheck,
+                new Label("Board Type:"),
                 englishBoard,
-                europeanBoard,
+                hexagonBoard,
+                diamondBoard,
+                diagonalCheck,
                 buttonRow,
                 new Separator(),
                 new Label("Status:"),
@@ -143,7 +151,8 @@ public class SolitaireGUI extends Application {
             if (newT == null) return;
 
             if (newT == englishBoard) currentType = BoardType.ENGLISH;
-            else currentType = BoardType.EUROPEAN;
+            else if (newT == hexagonBoard) currentType = BoardType.HEXAGON;
+            else currentType = BoardType.DIAMOND;
 
             startNewGame();
         });
@@ -207,11 +216,14 @@ public class SolitaireGUI extends Application {
     }
 
     // -------------------------------
-    // Size depends on board type:
-    // English = 7x7, European = 9x9
+    // Board size depends on board type:
+    // English = 7x7
+    // Hexagon = 9x9 (grid space, but masked into hex)
+    // Diamond = 9x9 (grid space, but masked into diamond)
     // -------------------------------
     private int sizeFor(BoardType type) {
-        return (type == BoardType.ENGLISH) ? 7 : 9;
+        if (type == BoardType.ENGLISH) return 7;
+        return 9;
     }
 
     // -------------------------------
@@ -229,13 +241,13 @@ public class SolitaireGUI extends Application {
         hasPeg = new boolean[size][size];
 
         // -------------------------------
-        // Build the board “mask” (cross shape)
+        // Build the board “mask” (shape)
         // - validHole[r][c] = true means that cell is part of the board
-        // - invalid corners are excluded to make the cross
         // -------------------------------
 
         if (type == BoardType.ENGLISH) {
-            // English 7x7:
+
+            // English 7x7 cross:
             // invalid if (r < 2 || r > 4) AND (c < 2 || c > 4)
             for (int r = 0; r < size; r++) {
                 for (int c = 0; c < size; c++) {
@@ -243,13 +255,36 @@ public class SolitaireGUI extends Application {
                     validHole[r][c] = valid;
                 }
             }
-        } else {
-            // European 9x9:
-            // invalid if (r < 3 || r > 5) AND (c < 3 || c > 5)
+
+        } else if (type == BoardType.DIAMOND) {
+
+            // Diamond shape (Manhattan distance from center)
+            int mid = size / 2;
             for (int r = 0; r < size; r++) {
                 for (int c = 0; c < size; c++) {
-                    boolean valid = !((r < 3 || r > 5) && (c < 3 || c > 5));
-                    validHole[r][c] = valid;
+                    validHole[r][c] = Math.abs(r - mid) + Math.abs(c - mid) <= mid;
+                }
+            }
+
+        } else {
+
+            // Hexagon board (true hex shape using cube distance)
+            // This creates a regular hex with "radius" = mid inside a (2*mid+1) x (2*mid+1) grid.
+            // For size=9 -> mid=4 -> radius=4.
+            int mid = size / 2;
+            int radius = mid;
+
+            for (int row = 0; row < size; row++) {
+                for (int col = 0; col < size; col++) {
+
+                    // Treat (col,row) as axial coords centered at (mid,mid)
+                    int q = col - mid;
+                    int rAx = row - mid;
+                    int s = -q - rAx;
+
+                    // Inside hex if cube distance <= radius
+                    int dist = Math.max(Math.abs(q), Math.max(Math.abs(rAx), Math.abs(s)));
+                    validHole[row][col] = dist <= radius;
                 }
             }
         }
@@ -457,7 +492,7 @@ public class SolitaireGUI extends Application {
     // -------------------------------
     // Refresh the UI text/styling to match current board state.
     // ● = peg, ○ = empty hole
-    // Also hides invalid cells so the board looks like a cross.
+    // Also hides invalid cells so the board looks like the correct shape.
     // -------------------------------
     private void refreshBoardUI() {
         int size = validHole.length;
@@ -492,7 +527,7 @@ public class SolitaireGUI extends Application {
         }
     }
 
-    // Set selection then refresh UI to show the highlight on the selected peg.
+    // Set selection then refresh UI
     private void setSelection(int r, int c) {
         selR = r;
         selC = c;
