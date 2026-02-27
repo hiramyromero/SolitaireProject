@@ -6,6 +6,7 @@
 // - Make a move by clicking a peg then clicking an empty hole
 // - Detect if the game is over (no valid moves left)
 // - Optional: allow diagonal moves (checkbox)
+// TEST COMMIT
 
 import javafx.application.Application;
 import javafx.geometry.Insets;
