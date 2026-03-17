@@ -92,7 +92,7 @@ public class EnglishSolitaireGameTest {
     void invalidMoveShouldFail() {
         EnglishSolitaireGame game = new EnglishSolitaireGame();
 
-        boolean moved = game.tryMove(3, 1, 3, 2); // This is only one space, not a valid jump
+        boolean moved = game.tryMove(3, 1, 3, 2); // Only one space, not a valid jump
         assertFalse(moved);
     }
 
@@ -114,5 +114,24 @@ public class EnglishSolitaireGameTest {
     void startingBoardShouldHave32Pegs() {
         EnglishSolitaireGame game = new EnglishSolitaireGame();
         assertEquals(32, game.countPegs());
+    }
+
+    /**
+     * Test that the peg count decreases by one after a valid move.
+     * A successful jump removes one peg from the board.
+     */
+    @Test
+    void pegCountShouldDecreaseAfterMove() {
+        EnglishSolitaireGame game = new EnglishSolitaireGame();
+
+        int beforeMove = game.countPegs();
+
+        // Perform a valid move
+        boolean moved = game.tryMove(3, 1, 3, 3);
+
+        int afterMove = game.countPegs();
+
+        assertTrue(moved);
+        assertEquals(beforeMove - 1, afterMove);
     }
 }
