@@ -1,7 +1,7 @@
 // SolitaireGUI.java
 // This file holds my JavaFX GUI + the basic game logic needed for Peg Solitaire.
 // Minimum features covered in this version:
-// - Choose the board type (English / Hexagon / Diamond) -> board type decides size + shape
+// - Choose the board type (English  / Diamond) -> board type decides size + shape
 // - Start a new game + restart current game
 // - Make a move by clicking a peg then clicking an empty hole
 // - Determine if a game is over (no valid moves left)
@@ -58,7 +58,7 @@ public class SolitaireGUI extends Application {
     private BoardType currentType = BoardType.ENGLISH;
     private int moveCount = 0;
 
-    @Override
+    @Override // This is where I set up my initial GUI and start the first game.
     public void start(Stage stage) {
 
         // -------------------------------
