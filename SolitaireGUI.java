@@ -1,12 +1,7 @@
 // SolitaireGUI.java
-// This file holds my JavaFX GUI + the basic game logic needed for Peg Solitaire.
-// Minimum features covered in this version:
-// - Choose the board type (English  / Diamond) -> board type decides size + shape
-// - Start a new game + restart current game
-// - Make a move by clicking a peg then clicking an empty hole
-// - Determine if a game is over (no valid moves left)
-// Still includes UI elements I already used:
-// - Text (labels), a line divider, a checkbox, and radio buttons
+// This is where the game is shown on screen.
+// It handles the UI (buttons, labels, clicks) and works with either
+// a manual game object or an automated game object.
 
 import javafx.application.Application;
 import javafx.geometry.Insets;
@@ -20,14 +15,7 @@ import javafx.stage.Stage;
 
 public class SolitaireGUI extends Application {
 
-    // Board types the user can choose
-    // Each type generates a different board shape
-    private enum BoardType {
-        ENGLISH,   // 7x7 cross
-        DIAMOND    // diamond-shaped board (uses a 9x9 grid space)
-    }
-
-    // --- GUI pieces I need to access later (so I store them as fields) ---
+    // --- GUI pieces I need to access later ---
     private GridPane boardGrid;
     private Label statusLabel;
     private Label statsLabel;
@@ -38,77 +26,101 @@ public class SolitaireGUI extends Application {
     private RadioButton englishBoard;
     private RadioButton diamondBoard;
 
+    private ToggleGroup modeGroup;
+    private RadioButton manualMode;
+    private RadioButton automatedMode;
+
+    private ComboBox<Integer> boardSizeCombo;
+
     private Button newGameBtn;
     private Button restartBtn;
+    private Button randomizeBtn;
+    private Button autoMoveBtn;
 
-    // --- Board state (this is basically my “model” in memory) ---
-    // validHole[r][c] = true means that (r,c) is an actual spot on the board.
-    // hasPeg[r][c]   = true means there is a peg currently sitting there.
-    private boolean[][] validHole;
-    private boolean[][] hasPeg;
+    // The current game object (manual or automated)
+    private AbstractSolitaireGame game;
 
     // I store the actual button objects so I can update their text/style after moves.
     private CellButton[][] buttons;
 
-    // Selection: user clicks a peg first (select), then clicks a destination hole (move).
+    // Selection for manual game
     private int selR = -1;
     private int selC = -1;
 
-    // Simple stats
-    private BoardType currentType = BoardType.ENGLISH;
-    private int moveCount = 0;
-
-    @Override // This is where I set up my initial GUI and start the first game.
+    @Override
     public void start(Stage stage) {
 
         // -------------------------------
         // Left panel (controls + labels)
         // -------------------------------
 
-        // Title section
         Label title = new Label("Solitaire GUI");
         title.setFont(Font.font(18));
 
-        // Simple divider under the title (just to make it look nicer)
         Line divider = new Line(0, 0, 280, 0);
 
-        // Checkbox to allow diagonal moves (this changes move rules)
-        diagonalCheck = new CheckBox("Allow diagonal moves");
+        // Game mode
+        modeGroup = new ToggleGroup();
 
-        // Radio buttons for board selection (English / Hexagon / Diamond)
+        manualMode = new RadioButton("Manual");
+        manualMode.setToggleGroup(modeGroup);
+        manualMode.setSelected(true);
+
+        automatedMode = new RadioButton("Automated");
+        automatedMode.setToggleGroup(modeGroup);
+
+        // Board type
         boardTypeGroup = new ToggleGroup();
 
         englishBoard = new RadioButton("English");
         englishBoard.setToggleGroup(boardTypeGroup);
         englishBoard.setSelected(true);
+
         diamondBoard = new RadioButton("Diamond");
         diamondBoard.setToggleGroup(boardTypeGroup);
 
-        // Main buttons
+        // Board size
+        boardSizeCombo = new ComboBox<>();
+        boardSizeCombo.getItems().addAll(7, 9);
+        boardSizeCombo.setValue(7);
+
+        // Diagonal moves
+        diagonalCheck = new CheckBox("Allow diagonal moves");
+
+        // Buttons
         newGameBtn = new Button("New Game");
         restartBtn = new Button("Restart");
+        randomizeBtn = new Button("Randomize");
+        autoMoveBtn = new Button("Auto Move");
 
-        // Put buttons side-by-side
-        HBox buttonRow = new HBox(10, newGameBtn, restartBtn);
-        buttonRow.setAlignment(Pos.CENTER_LEFT);
+        HBox buttonRow1 = new HBox(10, newGameBtn, restartBtn);
+        buttonRow1.setAlignment(Pos.CENTER_LEFT);
 
-        // Status shows hints like “select a peg” or “invalid move”
-        statusLabel = new Label("Select a peg, then select an empty hole.");
+        HBox buttonRow2 = new HBox(10, randomizeBtn, autoMoveBtn);
+        buttonRow2.setAlignment(Pos.CENTER_LEFT);
+
+        statusLabel = new Label("Choose your game settings and start.");
         statusLabel.setWrapText(true);
 
-        // Stats shows moves + pegs left
         statsLabel = new Label("");
         statsLabel.setWrapText(true);
 
-        // Full left panel layout
         VBox leftPanel = new VBox(12,
             title,
             divider,
+            new Label("Game Mode:"),
+            manualMode,
+            automatedMode,
+            new Separator(),
+            new Label("Board Size:"),
+            boardSizeCombo,
+            new Separator(),
             new Label("Board Type:"),
             englishBoard,
             diamondBoard,
             diagonalCheck,
-            buttonRow,
+            buttonRow1,
+            buttonRow2,
             new Separator(),
             new Label("Status:"),
             statusLabel,
@@ -117,163 +129,152 @@ public class SolitaireGUI extends Application {
             statsLabel
         );
         leftPanel.setPadding(new Insets(12));
-        leftPanel.setPrefWidth(240);
+        leftPanel.setPrefWidth(260);
 
         // -------------------------------
         // Center panel (board grid)
         // -------------------------------
 
-        // This is the container where I place my board buttons.
         boardGrid = new GridPane();
         boardGrid.setHgap(6);
         boardGrid.setVgap(6);
         boardGrid.setPadding(new Insets(12));
         boardGrid.setAlignment(Pos.CENTER);
 
-        // Main layout: controls on the left, board in the center
         BorderPane root = new BorderPane();
         root.setLeft(leftPanel);
         root.setCenter(boardGrid);
 
         // -------------------------------
-        // Wire up actions (event handlers)
+        // Wire up actions
         // -------------------------------
 
-        // If user changes board type, I start a new game with that board shape.
-        boardTypeGroup.selectedToggleProperty().addListener((obs, oldT, newT) -> {
-            if (newT == null) return;
-
-            if (newT == englishBoard) currentType = BoardType.ENGLISH;
-            else currentType = BoardType.DIAMOND;
-
-            startNewGame();
-        });
-
-        // New Game = rebuild board + reset stats
         newGameBtn.setOnAction(e -> startNewGame());
 
-        // Restart = keep same board type but reset to starting layout
         restartBtn.setOnAction(e -> restartGame());
 
-        // -------------------------------
-        // Start my initial game
-        // -------------------------------
+        randomizeBtn.setOnAction(e -> randomizeBoard());
+
+        autoMoveBtn.setOnAction(e -> makeAutoMove());
+
+        // Start initial game
         startNewGame();
 
-        Scene scene = new Scene(root, 820, 520);
+        Scene scene = new Scene(root, 980, 620);
         stage.setTitle("Solitaire GUI");
         stage.setScene(scene);
         stage.show();
     }
 
-    // -------------------------------
-    // This starts a fresh game
-    // - resets stats
-    // - rebuilds board for currentType
-    // - fills pegs to starting position
-    // -------------------------------
+    // Create a fresh game object based on current controls
     private void startNewGame() {
-        moveCount = 0;
         clearSelection();
 
-        buildBoardForType(currentType);
-        refreshBoardUI();
+        AbstractSolitaireGame.BoardType selectedBoardType =
+                englishBoard.isSelected()
+                        ? AbstractSolitaireGame.BoardType.ENGLISH
+                        : AbstractSolitaireGame.BoardType.DIAMOND;
 
-        statusLabel.setText("New game started. Select a peg, then select an empty hole.");
+        int selectedSize = boardSizeCombo.getValue();
+        boolean allowDiagonal = diagonalCheck.isSelected();
+
+        if (manualMode.isSelected()) {
+            game = new ManualSolitaireGame(selectedBoardType, selectedSize, allowDiagonal);
+        } else {
+            game = new AutomatedSolitaireGame(selectedBoardType, selectedSize, allowDiagonal);
+        }
+
+        buildBoardButtons();
+        refreshBoardUI();
         updateStats();
 
-        // Just in case, check if the board has moves (normally it will)
-        if (isGameOver()) {
+        if (manualMode.isSelected()) {
+            statusLabel.setText("New manual game started. Select a peg, then select an empty hole.");
+        } else {
+            statusLabel.setText("New automated game started. Click Auto Move to let the game play.");
+        }
+
+        if (game.isGameOver()) {
             statusLabel.setText("Game over: no moves available.");
         }
     }
 
-    // -------------------------------
-    // Restart keeps the board type,
-    // but resets pegs back to the starting arrangement.
-    // -------------------------------
+    // Restart same settings
     private void restartGame() {
-        moveCount = 0;
+        if (game == null) return;
+
         clearSelection();
-
-        initPegsToStartingPosition();
+        game.setDiagonalEnabled(diagonalCheck.isSelected());
+        game.restartGame();
         refreshBoardUI();
-
-        statusLabel.setText("Game restarted. Select a peg, then select an empty hole.");
         updateStats();
 
-        if (isGameOver()) {
+        if (manualMode.isSelected()) {
+            statusLabel.setText("Game restarted. Select a peg, then select an empty hole.");
+        } else {
+            statusLabel.setText("Automated game restarted. Click Auto Move to continue.");
+        }
+
+        if (game.isGameOver()) {
             statusLabel.setText("Game over: no moves available.");
         }
     }
 
-    // -------------------------------
-    // Board size depends on board type:
-    // English = 7x7
-    // Diamond = 9x9 (grid space, but masked into diamond)
-    // -------------------------------
-    private int sizeFor(BoardType type) {
-        if (type == BoardType.ENGLISH) return 7;
-        return 9;
+    // Randomize state of board
+    private void randomizeBoard() {
+        if (game == null) return;
+
+        clearSelection();
+        game.setDiagonalEnabled(diagonalCheck.isSelected());
+        game.randomizeBoard();
+        refreshBoardUI();
+        updateStats();
+
+        if (game.isGameOver()) {
+            statusLabel.setText("Board randomized. Game over: no legal moves.");
+        } else {
+            statusLabel.setText("Board randomized.");
+        }
     }
 
-    // -------------------------------
-    // Build the board arrays and GUI buttons
-    // validHole decides which coordinates actually exist on the board.
-    // -------------------------------
-    private void buildBoardForType(BoardType type) {
+    // Make one automated move
+    private void makeAutoMove() {
+        if (game == null) return;
+
+        if (!(game instanceof AutomatedSolitaireGame autoGame)) {
+            statusLabel.setText("Auto Move only works in Automated mode.");
+            return;
+        }
+
+        autoGame.setDiagonalEnabled(diagonalCheck.isSelected());
+
+        boolean moved = autoGame.makeAutomatedMove();
+        refreshBoardUI();
+        updateStats();
+
+        if (!moved) {
+            statusLabel.setText("Automated game is over. No legal moves.");
+        } else if (autoGame.isGameOver()) {
+            statusLabel.setText("Automated move made. Game over.");
+        } else {
+            statusLabel.setText("Automated move made.");
+        }
+    }
+
+    // Build button grid to match current game size
+    private void buildBoardButtons() {
         boardGrid.getChildren().clear();
 
-        int size = sizeFor(type);
-
-        // Allocate arrays for this board size
+        int size = game.getBoardSize();
         buttons = new CellButton[size][size];
-        validHole = new boolean[size][size];
-        hasPeg = new boolean[size][size];
 
-        // -------------------------------
-        // Build the board “mask” (shape)
-        // - validHole[r][c] = true means that cell is part of the board
-        // -------------------------------
-
-        if (type == BoardType.ENGLISH) {
-
-            // English 7x7 cross:
-            // invalid if (r < 2 || r > 4) AND (c < 2 || c > 4)
-            for (int r = 0; r < size; r++) {
-                for (int c = 0; c < size; c++) {
-                    boolean valid = !((r < 2 || r > 4) && (c < 2 || c > 4));
-                    validHole[r][c] = valid;
-                }
-            }
-
-        } else {
-
-            // Diamond shape (Manhattan distance from center)
-            int mid = size / 2;
-            for (int r = 0; r < size; r++) {
-                for (int c = 0; c < size; c++) {
-                    validHole[r][c] = Math.abs(r - mid) + Math.abs(c - mid) <= mid;
-                }
-            }
-        }
-
-        // Fill pegs in starting positions (everything filled except the center)
-        initPegsToStartingPosition();
-
-        // -------------------------------
-        // Create a button for each coordinate
-        // - If the coordinate is invalid, we hide it later
-        // - If it is valid, we show ● or ○ based on hasPeg
-        // -------------------------------
         for (int r = 0; r < size; r++) {
             for (int c = 0; c < size; c++) {
-
                 CellButton cellBtn = new CellButton(r, c);
                 cellBtn.setPrefSize(48, 48);
                 cellBtn.setStyle(baseCellStyle());
 
-                // When clicked, try selection/move logic
+                // Clicks matter only in manual mode
                 cellBtn.setOnAction(e -> onCellClicked(cellBtn.row, cellBtn.col));
 
                 buttons[r][c] = cellBtn;
@@ -282,196 +283,82 @@ public class SolitaireGUI extends Application {
         }
     }
 
-    // -------------------------------
-    // Starting layout for peg solitaire:
-    // - All valid holes contain pegs
-    // - Center hole is empty
-    // -------------------------------
-    private void initPegsToStartingPosition() {
-        int size = validHole.length;
+    // Manual click behavior
+    private void onCellClicked(int r, int c) {
+        if (game == null) return;
 
-        for (int r = 0; r < size; r++) {
-            for (int c = 0; c < size; c++) {
-                hasPeg[r][c] = validHole[r][c];
-            }
+        // Board clicks only work in manual mode
+        if (!(game instanceof ManualSolitaireGame)) {
+            statusLabel.setText("Board clicks are only for Manual mode.");
+            return;
         }
 
-        // Center is empty at start
-        int mid = size / 2;
-        hasPeg[mid][mid] = false;
-    }
+        boolean[][] validHole = game.getValidHole();
+        boolean[][] hasPeg = game.getHasPeg();
 
-    // -------------------------------
-    // Click behavior:
-    // 1) If nothing selected: must click a peg to select it.
-    // 2) If clicking selected peg again: deselect.
-    // 3) If clicking a different peg: switch selection.
-    // 4) If clicking an empty hole: attempt a move.
-    // -------------------------------
-    private void onCellClicked(int r, int c) {
         if (!validHole[r][c]) return;
 
-        // If game is over, stop moves and tell the user.
-        if (isGameOver()) {
+        if (game.isGameOver()) {
             statusLabel.setText("Game over: no moves available. Start a New Game or Restart.");
             return;
         }
 
-        // (1) No selection yet: user must choose a peg first
+        // No peg selected yet
         if (selR == -1) {
             if (!hasPeg[r][c]) {
                 statusLabel.setText("That hole is empty. Select a peg first.");
                 return;
             }
+
             setSelection(r, c);
             statusLabel.setText("Peg selected. Now click a destination empty hole.");
             return;
         }
 
-        // (2) Clicking the same peg again clears selection
+        // Clicking same peg again clears selection
         if (r == selR && c == selC) {
             clearSelection();
             statusLabel.setText("Selection cleared. Select a peg.");
             return;
         }
 
-        // (3) If they click a different peg, just switch selection
+        // Clicking another peg switches selection
         if (hasPeg[r][c]) {
             setSelection(r, c);
             statusLabel.setText("Switched selection. Now click a destination empty hole.");
             return;
         }
 
-        // (4) They clicked an empty hole: attempt the jump move
-        if (tryMove(selR, selC, r, c)) {
-            moveCount++;
+        // Clicking empty hole tries a move
+        game.setDiagonalEnabled(diagonalCheck.isSelected());
+
+        if (game.tryMove(selR, selC, r, c)) {
             clearSelection();
             refreshBoardUI();
+            updateStats();
 
-            if (isGameOver()) {
+            if (game.isGameOver()) {
                 statusLabel.setText("Move made. Game over: no moves available.");
             } else {
                 statusLabel.setText("Move made. Select a peg for the next move.");
             }
-
-            updateStats();
         } else {
             statusLabel.setText("Invalid move. Jump over exactly one peg into an empty hole.");
         }
     }
 
-    // -------------------------------
-    // Attempt a move:
-    // - Move is a “jump” of 2 spaces
-    // - Middle spot must contain a peg (the one we remove)
-    // - Destination must be empty
-    // - Orthogonal moves always allowed; diagonal only if checkbox enabled
-    // -------------------------------
-    private boolean tryMove(int fromR, int fromC, int toR, int toC) {
-        if (!validHole[fromR][fromC] || !validHole[toR][toC]) return false;
-        if (!hasPeg[fromR][fromC]) return false;
-        if (hasPeg[toR][toC]) return false;
-
-        int dr = toR - fromR;
-        int dc = toC - fromC;
-
-        boolean allowDiagonal = diagonalCheck.isSelected();
-
-        boolean isOrthogonalJump =
-                (Math.abs(dr) == 2 && dc == 0) ||
-                (Math.abs(dc) == 2 && dr == 0);
-
-        boolean isDiagonalJump =
-                allowDiagonal && (Math.abs(dr) == 2 && Math.abs(dc) == 2);
-
-        // Must be exactly a 2-cell jump in a legal direction
-        if (!isOrthogonalJump && !isDiagonalJump) return false;
-
-        // Middle cell is halfway between from and to
-        int midR = fromR + dr / 2;
-        int midC = fromC + dc / 2;
-
-        // Middle must be valid AND must have a peg to jump over
-        if (!validHole[midR][midC]) return false;
-        if (!hasPeg[midR][midC]) return false;
-
-        // Execute move:
-        // - from becomes empty
-        // - middle peg is removed
-        // - destination becomes peg
-        hasPeg[fromR][fromC] = false;
-        hasPeg[midR][midC] = false;
-        hasPeg[toR][toC] = true;
-
-        return true;
-    }
-
-    // -------------------------------
-    // Game over = no valid moves exist.
-    // I scan every peg and see if it can jump somewhere.
-    // -------------------------------
-    private boolean isGameOver() {
-        int size = validHole.length;
-        boolean allowDiagonal = diagonalCheck.isSelected();
-
-        // Directions are “2 cells away” because a jump is length 2
-        int[][] dirs = allowDiagonal
-                ? new int[][]{
-                    {-2, 0}, {2, 0}, {0, -2}, {0, 2},
-                    {-2, -2}, {-2, 2}, {2, -2}, {2, 2}
-                }
-                : new int[][]{
-                    {-2, 0}, {2, 0}, {0, -2}, {0, 2}
-                };
-
-        for (int r = 0; r < size; r++) {
-            for (int c = 0; c < size; c++) {
-
-                // Only consider real holes that currently have pegs
-                if (!validHole[r][c] || !hasPeg[r][c]) continue;
-
-                for (int[] d : dirs) {
-                    int toR = r + d[0];
-                    int toC = c + d[1];
-
-                    // Destination must be on board and empty
-                    if (!inBounds(toR, toC)) continue;
-                    if (!validHole[toR][toC]) continue;
-                    if (hasPeg[toR][toC]) continue;
-
-                    // Middle must have a peg
-                    int midR = r + d[0] / 2;
-                    int midC = c + d[1] / 2;
-
-                    if (inBounds(midR, midC) && validHole[midR][midC] && hasPeg[midR][midC]) {
-                        return false; // found at least one legal move
-                    }
-                }
-            }
-        }
-
-        return true; // no moves were found anywhere
-    }
-
-    // Bounds check helper
-    private boolean inBounds(int r, int c) {
-        return r >= 0 && c >= 0 && r < validHole.length && c < validHole.length;
-    }
-
-    // -------------------------------
-    // Refresh the UI text/styling to match current board state.
-    // ● = peg, ○ = empty hole
-    // Also hides invalid cells so the board looks like the correct shape.
-    // -------------------------------
+    // Refresh board display from current game state
     private void refreshBoardUI() {
-        int size = validHole.length;
+        if (game == null) return;
+
+        boolean[][] validHole = game.getValidHole();
+        boolean[][] hasPeg = game.getHasPeg();
+        int size = game.getBoardSize();
 
         for (int r = 0; r < size; r++) {
             for (int c = 0; c < size; c++) {
-
                 CellButton b = buttons[r][c];
 
-                // If not part of board: hide it
                 if (!validHole[r][c]) {
                     b.setDisable(true);
                     b.setText("");
@@ -479,14 +366,11 @@ public class SolitaireGUI extends Application {
                     continue;
                 }
 
-                // Otherwise show it
                 b.setVisible(true);
                 b.setDisable(false);
 
-                // Display peg vs empty
                 b.setText(hasPeg[r][c] ? "●" : "○");
 
-                // Highlight selected peg
                 if (r == selR && c == selC) {
                     b.setStyle(selectedCellStyle());
                 } else {
@@ -496,43 +380,35 @@ public class SolitaireGUI extends Application {
         }
     }
 
-    // Set selection then refresh UI
     private void setSelection(int r, int c) {
         selR = r;
         selC = c;
         refreshBoardUI();
     }
 
-    // Clear selection then refresh UI
     private void clearSelection() {
         selR = -1;
         selC = -1;
         if (buttons != null) refreshBoardUI();
     }
 
-    // -------------------------------
-    // Stats helpers (moves + pegs left)
-    // -------------------------------
+    // Stats
     private void updateStats() {
-        statsLabel.setText("Moves: " + moveCount + "\nPegs remaining: " + countPegs());
+        if (game == null) return;
+
+        String modeText = (game instanceof AutomatedSolitaireGame) ? "Automated" : "Manual";
+        String typeText = game.getBoardType() == AbstractSolitaireGame.BoardType.ENGLISH ? "English" : "Diamond";
+
+        statsLabel.setText(
+            "Mode: " + modeText +
+            "\nBoard Size: " + game.getBoardSize() +
+            "\nBoard Type: " + typeText +
+            "\nMoves: " + game.getMoveCount() +
+            "\nPegs remaining: " + game.countPegs()
+        );
     }
 
-    private int countPegs() {
-        int size = validHole.length;
-        int count = 0;
-
-        for (int r = 0; r < size; r++) {
-            for (int c = 0; c < size; c++) {
-                if (validHole[r][c] && hasPeg[r][c]) count++;
-            }
-        }
-        return count;
-    }
-
-    // -------------------------------
-    // Simple styling for buttons.
-    // (Later I can move this into a CSS file.)
-    // -------------------------------
+    // Simple styles
     private String baseCellStyle() {
         return "-fx-font-size: 18px; -fx-font-weight: bold;";
     }
@@ -541,10 +417,7 @@ public class SolitaireGUI extends Application {
         return "-fx-font-size: 18px; -fx-font-weight: bold; -fx-border-color: black; -fx-border-width: 3px;";
     }
 
-    // -------------------------------
-    // Custom button class so each cell stores its own (row,col)
-    // This makes click-handling easier.
-    // -------------------------------
+    // Custom board button
     private static class CellButton extends Button {
         final int row;
         final int col;
