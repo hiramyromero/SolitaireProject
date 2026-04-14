@@ -5,6 +5,8 @@
  * It does NOT handle the board or game rules — that is done in other classes.
  */
 
+// TEST
+
 
 public class SolitaireGame {
 // This class manages the game state, including the score and whether diagonal moves are enabled.
