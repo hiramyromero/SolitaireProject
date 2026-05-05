@@ -1,0 +1,7 @@
+Mode: Manual
+Board Type: ENGLISH
+Board Size: 7
+Diagonal Enabled: false
+Moves:
+3,5 -> 3,3
+Recording ended.

@@ -36,6 +36,9 @@ public class SolitaireGUI extends Application {
     private Button restartBtn;
     private Button randomizeBtn;
     private Button autoMoveBtn;
+    private Button recordBtn;
+
+    private GameRecorder recorder = new GameRecorder();
 
     // The current game object (manual or automated)
     private AbstractSolitaireGame game;
@@ -92,12 +95,16 @@ public class SolitaireGUI extends Application {
         restartBtn = new Button("Restart");
         randomizeBtn = new Button("Randomize");
         autoMoveBtn = new Button("Auto Move");
+        recordBtn = new Button("Record Game");
 
         HBox buttonRow1 = new HBox(10, newGameBtn, restartBtn);
         buttonRow1.setAlignment(Pos.CENTER_LEFT);
 
         HBox buttonRow2 = new HBox(10, randomizeBtn, autoMoveBtn);
         buttonRow2.setAlignment(Pos.CENTER_LEFT);
+
+        HBox buttonRow3 = new HBox(10, recordBtn);
+        buttonRow3.setAlignment(Pos.CENTER_LEFT);
 
         statusLabel = new Label("Choose your game settings and start.");
         statusLabel.setWrapText(true);
@@ -121,6 +128,7 @@ public class SolitaireGUI extends Application {
             diagonalCheck,
             buttonRow1,
             buttonRow2,
+            buttonRow3,
             new Separator(),
             new Label("Status:"),
             statusLabel,
@@ -157,6 +165,8 @@ public class SolitaireGUI extends Application {
 
         autoMoveBtn.setOnAction(e -> makeAutoMove());
 
+        recordBtn.setOnAction(e -> toggleRecording());
+
         // Start initial game
         startNewGame();
 
@@ -169,6 +179,11 @@ public class SolitaireGUI extends Application {
     // Create a fresh game object based on current controls
     private void startNewGame() {
         clearSelection();
+
+        if (recorder.isRecording()) {
+            recorder.stopRecording();
+            recordBtn.setText("Record Game");
+        }
 
         AbstractSolitaireGame.BoardType selectedBoardType =
                 englishBoard.isSelected()
@@ -217,6 +232,11 @@ public class SolitaireGUI extends Application {
 
         if (game.isGameOver()) {
             statusLabel.setText("Game over: no moves available.");
+
+            if (recorder.isRecording()) {
+                recorder.stopRecording();
+                recordBtn.setText("Record Game");
+            }
         }
     }
 
@@ -227,11 +247,19 @@ public class SolitaireGUI extends Application {
         clearSelection();
         game.setDiagonalEnabled(diagonalCheck.isSelected());
         game.randomizeBoard();
+
+        recorder.recordRandomize();
+
         refreshBoardUI();
         updateStats();
 
         if (game.isGameOver()) {
             statusLabel.setText("Board randomized. Game over: no legal moves.");
+
+            if (recorder.isRecording()) {
+                recorder.stopRecording();
+                recordBtn.setText("Record Game");
+            }
         } else {
             statusLabel.setText("Board randomized.");
         }
@@ -248,17 +276,56 @@ public class SolitaireGUI extends Application {
 
         autoGame.setDiagonalEnabled(diagonalCheck.isSelected());
 
-        boolean moved = autoGame.makeAutomatedMove();
+        AbstractSolitaireGame.Move move = autoGame.getRandomMove();
+
+        if (move == null) {
+            statusLabel.setText("Automated game is over. No legal moves.");
+
+            if (recorder.isRecording()) {
+                recorder.stopRecording();
+                recordBtn.setText("Record Game");
+            }
+
+            return;
+        }
+
+        boolean moved = autoGame.tryMove(move.fromR, move.fromC, move.toR, move.toC);
+
+        if (moved) {
+            recorder.recordMove(move.fromR, move.fromC, move.toR, move.toC);
+        }
+
         refreshBoardUI();
         updateStats();
 
-        if (!moved) {
-            statusLabel.setText("Automated game is over. No legal moves.");
-        } else if (autoGame.isGameOver()) {
+        if (autoGame.isGameOver()) {
             statusLabel.setText("Automated move made. Game over.");
+
+            if (recorder.isRecording()) {
+                recorder.stopRecording();
+                recordBtn.setText("Record Game");
+            }
         } else {
             statusLabel.setText("Automated move made.");
         }
+    }
+
+    // Start or stop recording
+    private void toggleRecording() {
+        if (game == null) return;
+
+        if (!recorder.isRecording()) {
+            String mode = manualMode.isSelected() ? "Manual" : "Automated";
+            recorder.startRecording(game, mode);
+            recordBtn.setText("Stop Recording");
+            statusLabel.setText("Recording started. Moves are being saved to recorded_game.txt.");
+        } else {
+            recorder.stopRecording();
+            recordBtn.setText("Record Game");
+            statusLabel.setText("Recording stopped. File saved as recorded_game.txt.");
+        }
+
+        updateStats();
     }
 
     // Build button grid to match current game size
@@ -300,6 +367,12 @@ public class SolitaireGUI extends Application {
 
         if (game.isGameOver()) {
             statusLabel.setText("Game over: no moves available. Start a New Game or Restart.");
+
+            if (recorder.isRecording()) {
+                recorder.stopRecording();
+                recordBtn.setText("Record Game");
+            }
+
             return;
         }
 
@@ -333,12 +406,19 @@ public class SolitaireGUI extends Application {
         game.setDiagonalEnabled(diagonalCheck.isSelected());
 
         if (game.tryMove(selR, selC, r, c)) {
+            recorder.recordMove(selR, selC, r, c);
+
             clearSelection();
             refreshBoardUI();
             updateStats();
 
             if (game.isGameOver()) {
                 statusLabel.setText("Move made. Game over: no moves available.");
+
+                if (recorder.isRecording()) {
+                    recorder.stopRecording();
+                    recordBtn.setText("Record Game");
+                }
             } else {
                 statusLabel.setText("Move made. Select a peg for the next move.");
             }
@@ -404,7 +484,8 @@ public class SolitaireGUI extends Application {
             "\nBoard Size: " + game.getBoardSize() +
             "\nBoard Type: " + typeText +
             "\nMoves: " + game.getMoveCount() +
-            "\nPegs remaining: " + game.countPegs()
+            "\nPegs remaining: " + game.countPegs() +
+            "\nRecording: " + (recorder.isRecording() ? "ON" : "OFF")
         );
     }
 
